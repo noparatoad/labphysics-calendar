@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ปฏิทินปฏิบัติการฟิสิกส์</title>
+  <!-- Google Fonts (Sarabun) -->
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- FullCalendar -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+  <!-- Tippy.js (Popup) -->
+  <script src="https://unpkg.com/@popperjs/core@2"></script>
+  <script src="https://unpkg.com/tippy.js@6"></script>
+  <!-- html2canvas & jsPDF (สำหรับ Export รูปและ PDF) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+  <style>
+    body { font-family: 'Sarabun', sans-serif; background-color: #f4f7f6; }
+    .su-header { background-color: #006666; color: white; padding: 20px 0; margin-bottom: 20px; }
+    
+    /* พื้นที่ที่จะถูกแคปเจอร์เป็นรูปและ PDF */
+    #printableArea { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    #exportHeader { display: none; text-align: center; margin-bottom: 15px; color: #006666; }
+    
+    .fc-event { cursor: pointer; border: none; padding: 2px 4px; font-size: 0.9em; }
+    .control-panel { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+  <!-- Header เว็บ -->
+  <div class="su-header text-center">
+    <h2>ตารางเรียนปฏิบัติการฟิสิกส์</h2>
+    <p class="mb-0">ภาควิชาฟิสิกส์ คณะวิทยาศาสตร์ มหาวิทยาลัยศิลปากร</p>
+  </div>
+
+  <div class="container mb-5">
+    
+    <!-- แผงควบคุม: กรองรายวิชา และ ปุ่มดาวน์โหลด -->
+    <div class="control-panel">
+      <div class="row align-items-center g-3">
+        
+        <!-- Dropdown เลือกรายวิชา -->
+        <div class="col-md-5">
+          <label for="courseFilter" class="form-label fw-bold mb-1">📚 เลือกรายวิชาที่ต้องการแสดง/บันทึก:</label>
+          <select id="courseFilter" class="form-select" onchange="filterEvents()">
+            <option value="ALL">แสดงทุกรายวิชา (ทั้งหมด)</option>
+            <!-- รายชื่อวิชาจะถูกสร้างอัตโนมัติด้วย JS -->
+          </select>
+        </div>
+
+        <!-- ปุ่มบันทึกและแอดมิน -->
+        <div class="col-md-7 text-md-end mt-4">
+          <button class="btn btn-success me-1 mb-1" onclick="exportCalendar('image')" id="btnImg">
+            🖼️ บันทึกเป็นรูปภาพ
+          </button>
+          <button class="btn btn-danger me-3 mb-1" onclick="exportCalendar('pdf')" id="btnPdf">
+            📄 บันทึกเป็น PDF
+          </button>
+          
+          <button class="btn btn-outline-secondary btn-sm me-1 mb-1" onclick="loadEvents(true)" title="ดึงข้อมูลใหม่จาก Sheet">
+            🔄
+          </button>
+          <button class="btn btn-outline-primary btn-sm mb-1" data-bs-toggle="modal" data-bs-target="#adminModal">
+            ⚙️ แอดมิน
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- พื้นที่ปฏิทิน (ส่วนที่จะถูก Export) -->
+    <div id="printableArea">
+      <!-- หัวกระดาษที่จะโผล่มาเฉพาะตอนเซฟรูป/PDF -->
+      <div id="exportHeader">
+        <h3 class="mb-1">ตารางเรียนปฏิบัติการฟิสิกส์ ม.ศิลปากร</h3>
+        <h5 id="exportCourseName" class="text-secondary">ทุกรายวิชา</h5>
+        <hr>
+      </div>
+      
+      <div id="calendar"></div>
+    </div>
+
+  </div>
+
+  <!-- Modal สำหรับคลิกดูรายละเอียด -->
+  <div class="modal fade" id="eventDetailModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">รายวิชา</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p><strong>เวลา:</strong> <span id="modalTime"></span></p>
+          <p><strong>รายละเอียด:</strong> <span id="modalDetails"></span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal สำหรับ Admin เพิ่มข้อมูล -->
+  <div class="modal fade" id="adminModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">เพิ่มตารางเรียน (สำหรับแอดมิน)</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="addEventForm">
+            <div class="mb-2"><input type="text" class="form-control" id="courseCode" placeholder="รหัสวิชา (เช่น 514104)" required></div>
+            <div class="mb-2"><input type="text" class="form-control" id="courseName" placeholder="ชื่อวิชา (เช่น ปฏิบัติการฟิสิกส์ทั่วไป 2)" required></div>
+            <div class="mb-2"><input type="date" class="form-control" id="date" required></div>
+            <div class="row mb-2">
+              <div class="col"><input type="time" class="form-control" id="startTime" required></div>
+              <div class="col"><input type="time" class="form-control" id="endTime" required></div>
+            </div>
+            <div class="mb-2"><textarea class="form-control" id="details" placeholder="รายละเอียด (ชื่อแล็บ)" required></textarea></div>
+            <div class="mb-2">
+              <label>สีป้ายวิชา:</label>
+              <input type="color" class="form-control form-control-color" id="color" value="#006666">
+            </div>
+            <hr>
+            <div class="mb-2"><input type="password" class="form-control" id="password" placeholder="รหัสผ่านแอดมิน" required></div>
+            <button type="submit" class="btn btn-success w-100">บันทึกข้อมูล</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // *** นำ URL จาก Google Apps Script มาใส่ตรงนี้ ***
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxBZP8rSihtQl9ocW4l9ngAjAVvBoyIh3qvn9Ko7MA-LVdhZypmwLJqMvezbBojJw_I/exec'; 
+    
+    let calendar;
+    let allEventsData = []; // เก็บข้อมูลทั้งหมดไว้ใช้ตอนกรองวิชา
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const calendarEl = document.getElementById('calendar');
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'th',
+        height: 'auto', // ปรับความสูงอัตโนมัติเพื่อให้ถ่ายรูปไม่ตกขอบ
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,listMonth'
+        },
+        buttonText: { today: 'วันนี้', month: 'ตารางเดือน', list: 'รูปแบบรายการ' },
+        
+        eventDidMount: function(info) {
+          tippy(info.el, {
+            content: `<strong>${info.event.title}</strong>
+เวลา: ${info.event.extendedProps.time}
+${info.event.extendedProps.details}`,
+            allowHTML: true,
+            theme: 'light-border'
+          });
+        },
+        
+        eventClick: function(info) {
+          document.getElementById('modalTitle').innerText = info.event.title;
+          document.getElementById('modalTime').innerText = info.event.extendedProps.time;
+          document.getElementById('modalDetails').innerText = info.event.extendedProps.details;
+          new bootstrap.Modal(document.getElementById('eventDetailModal')).show();
+        }
+      });
+      calendar.render();
+      loadEvents();
+    });
+
+    // ดึงข้อมูลจาก Google Sheets
+    function loadEvents(nocache = false) {
+      let url = SCRIPT_URL;
+      if(nocache) url += "?nocache=1";
+      
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          allEventsData = data; // เก็บข้อมูลต้นฉบับไว้
+          populateCourseDropdown(data); // สร้างตัวเลือกวิชาใน Dropdown
+          filterEvents(); // แสดงผลตามตัวเลือก
+        })
+        .catch(error => console.error('Error loading events:', error));
+    }
+
+    // สร้างรายชื่อวิชาใน Dropdown อัตโนมัติ (ไม่ซ้ำกัน)
+    function populateCourseDropdown(events) {
+      const select = document.getElementById('courseFilter');
+      const currentVal = select.value;
+      select.innerHTML = '<option value="ALL">แสดงทุกรายวิชา (ทั้งหมด)</option>';
+      
+      const uniqueCourses = {};
+      events.forEach(ev => {
+        const code = ev.extendedProps.courseCode;
+        const name = ev.extendedProps.courseName;
+        if(code && !uniqueCourses[code]) {
+          uniqueCourses[code] = `${code} ${name}`;
+        }
+      });
+
+      for (const [code, fullName] of Object.entries(uniqueCourses)) {
+        const option = document.createElement('option');
+        option.value = code;
+        option.text = fullName;
+        select.appendChild(option);
+      }
+      
+      // คงค่าเดิมที่เลือกไว้ (ถ้ามี)
+      if( uniqueCourses[currentVal] ) select.value = currentVal;
+    }
+
+    // ฟังก์ชันกรองวิชาที่จะแสดงบนปฏิทิน
+    function filterEvents() {
+      const selectedCourse = document.getElementById('courseFilter').value;
+      const selectText = document.getElementById('courseFilter').options[document.getElementById('courseFilter').selectedIndex].text;
+      
+      // อัปเดตชื่อวิชาในหัวกระดาษ (สำหรับตอนปริ้น)
+      document.getElementById('exportCourseName').innerText = selectText;
+
+      calendar.removeAllEvents();
+      if (selectedCourse === 'ALL') {
+        calendar.addEventSource(allEventsData);
+      } else {
+        const filtered = allEventsData.filter(ev => ev.extendedProps.courseCode === selectedCourse);
+        calendar.addEventSource(filtered);
+      }
+    }
+
+    // ฟังก์ชันบันทึกเป็นรูปภาพ และ PDF
+    function exportCalendar(type) {
+      const btnImg = document.getElementById('btnImg');
+      const btnPdf = document.getElementById('btnPdf');
+      const exportHeader = document.getElementById('exportHeader');
+      const printableArea = document.getElementById('printableArea');
+      const courseCode = document.getElementById('courseFilter').value;
+      const fileName = `PhysicsLab_SU_${courseCode}_${new Date().toISOString().slice(0,10)}`;
+
+      // ปิดปุ่มชั่วคราวและแสดงหัวกระดาษ
+      btnImg.disabled = true; btnPdf.disabled = true;
+      exportHeader.style.display = 'block';
+
+      // ใช้ html2canvas ถ่ายภาพกล่อง #printableArea
+      html2canvas(printableArea, {
+        scale: 2, // เพิ่มความคมชัดเป็น 2 เท่า
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      }).then(canvas => {
+        
+        if (type === 'image') {
+          // ดาวน์โหลดเป็น PNG
+          let link = document.createElement('a');
+          link.download = `${fileName}.png`;
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+        } 
+        else if (type === 'pdf') {
+          // ดาวน์โหลดเป็น PDF แนวนอน (Landscape)
+          const { jsPDF } = window.jspdf;
+          let pdf = new jsPDF('l', 'mm', 'a4'); // 'l' = แนวนอน, ขนาด A4
+          
+          let pageWidth = pdf.internal.pageSize.getWidth();
+          let pageHeight = pdf.internal.pageSize.getHeight();
+          
+          let imgWidth = pageWidth - 20; //เว้นขอบซ้ายขวาข้างละ 10mm
+          let imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+          // ถ้ารูปสูงเกินหน้ากระดาษ ให้ปรับลดตามความสูงแทน
+          if (imgHeight > pageHeight - 20) {
+            imgHeight = pageHeight - 20;
+            imgWidth = (canvas.width * imgHeight) / canvas.height;
+          }
+
+          let x = (pageWidth - imgWidth) / 2; // จัดกึ่งกลางแนวนอน
+          let y = 10; // ขอบบน 10mm
+
+          pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, imgWidth, imgHeight);
+          pdf.save(`${fileName}.pdf`);
+        }
+
+      }).finally(() => {
+        // ซ่อนหัวกระดาษกลับเหมือนเดิม และเปิดปุ่มใช้งาน
+        exportHeader.style.display = 'none';
+        btnImg.disabled = false; btnPdf.disabled = false;
+      });
+    }
+
+    // ฟังก์ชันส่งข้อมูลไปบันทึก (สำหรับแอดมิน)
+    document.getElementById('addEventForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const btn = e.target.querySelector('button');
+      btn.disabled = true; btn.innerText = "กำลังบันทึก...";
+
+      const payload = {
+        courseCode: document.getElementById('courseCode').value,
+        courseName: document.getElementById('courseName').value,
+        date: document.getElementById('date').value,
+        startTime: document.getElementById('startTime').value,
+        endTime: document.getElementById('endTime').value,
+        details: document.getElementById('details').value,
+        color: document.getElementById('color').value,
+        password: document.getElementById('password').value
+      };
+
+      fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) })
+      .then(res => res.json())
+      .then(res => {
+        if(res.status === 'success') {
+          alert('บันทึกสำเร็จ!');
+          bootstrap.Modal.getInstance(document.getElementById('adminModal')).hide();
+          e.target.reset();
+          loadEvents(true);
+        } else { alert('เกิดข้อผิดพลาด: ' + res.message); }
+      })
+      .finally(() => { btn.disabled = false; btn.innerText = "บันทึกข้อมูล"; });
+    });
+  </script>
+</body>
+</html>
