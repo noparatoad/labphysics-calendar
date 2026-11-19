@@ -146,11 +146,23 @@
       calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         locale: 'th',
-        height: 'auto', // ปรับความสูงอัตโนมัติเพื่อให้ถ่ายรูปไม่ตกขอบ
+        eventDisplay: 'block', // แสดงเป็นแถบสี
+        dayMaxEvents: false,   // แสดงทุกรายการไม่ย่อ
+        
+        // --- แก้ไขและเพิ่มส่วนการแสดงผลเวลาตรงนี้ครับ ---
+        displayEventTime: true, // เปิดให้แสดงเวลา (ถ้าเดิมเป็น false ให้แก้เป็น true)
+        displayEventEnd: true,  // <--- เพิ่มบรรทัดนี้ถ้าอยากให้โชว์เวลาเลิกเรียนด้วย
+        eventTimeFormat: {      // บังคับรูปแบบเวลาให้แสดง นาที (:00) เสมอ
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false         // ใช้ระบบ 24 ชั่วโมง (เช่น 13:00)
+        },
+        // -------------------------------------------
+
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
-          right: 'dayGridMonth,listMonth'
+          right: 'dayGridMonth,timeGridWeek,listMonth'
         },
         buttonText: { today: 'วันนี้', month: 'ตารางเดือน', list: 'รูปแบบรายการ' },
         
